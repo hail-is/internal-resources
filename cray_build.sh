@@ -1,16 +1,48 @@
+#!/bin/bash
+
+set -ex
+
+HAIL_INST=/mnt/lustre/tpoterba/hail-inst
+echo "HAIL_INST=$HAIL_INST"
+
+SPARK_VERSION=1.5.2
+echo "spark.version=$SPARK_VERSION"
+
 git fetch
 git checkout origin/master
-gradle --daemon shadowJar
-CODE=$?
-if [ $CODE -eq 0 ]; then
-    HASH=`git rev-parse --verify --short HEAD`
-    echo Current build hash is [$HASH]
-    cp /mnt/lustre/tpoterba/hail/build/libs/hail-all-spark.jar /mnt/lustre/tpoterba/hail-inst/lib/hail-all-spark-$HASH.jar
-    awk '/#/ {print $0; next} {printf "# %s\n", $0}' /mnt/lustre/tpoterba/hail-inst/etc/jar.sh >> /mnt/lustre/tpoterba/hail-inst/etc/jar.tmp.sh
-    echo "# `date +"%Y-%m-%d %T"`" >> /mnt/lustre/tpoterba/hail-inst/etc/jar.tmp.sh
-    echo "JAR='/mnt/lustre/tpoterba/hail-inst/lib/hail-all-spark-$HASH.jar'" >> /mnt/lustre/tpoterba/hail-inst/etc/jar.tmp.sh
-    mv /mnt/lustre/tpoterba/hail-inst/etc/jar.tmp.sh /mnt/lustre/tpoterba/hail-inst/etc/jar.sh
-    echo Done!
-else
-    echo "Problem occurred with gradle build, exiting..."
-fi
+
+./gradlew --daemon -Dspark.version=$SPARK_VERSION clean shadowTestJar shadowJar
+
+# test against cluster
+hdfs dfs -mkdir -p src/test
+hdfs dfs -rm -r -skipTrash src/test/resources
+hdfs dfs -put src/test/resources src/test
+
+SPARK_CLASSPATH=./build/libs/hail-all-spark-test.jar \
+	       spark-submit \
+	       --total-executor-cores 8 \
+	       --class org.testng.TestNG \
+	       ./build/libs/hail-all-spark-test.jar \
+	       ./testng.xml
+
+# create if necessary
+mkdir -p $HAIL_INST/etc
+mkdir -p $HAIL_INST/lib
+touch $HAIL_INST/etc/jar.sh
+
+HASH=`git rev-parse --verify --short HEAD`
+echo "HASH=$HASH"
+
+JAR=$HAIL_INST/lib/hail-all-spark$SPARK_VERSION-$HASH.jar
+echo "JAR=$JAR"
+
+cp build/libs/hail-all-spark.jar $JAR
+
+TMP_JAR_SH=`mktemp`
+
+awk '/#/ {print $0; next} {printf "# %s\n", $0}' $HAIL_INST/etc/jar.sh > $TMP_JAR_SH
+echo "# `date +"%Y-%m-%d %T"` hail-all-spark$SPARK_VERSION-$HASH.jar" >> $TMP_JAR_SH
+echo "JAR='$JAR'" >> $TMP_JAR_SH
+mv $TMP_JAR_SH $HAIL_INST/etc/jar.sh
+
+echo "Done!"
