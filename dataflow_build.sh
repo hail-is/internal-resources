@@ -5,13 +5,13 @@ set -ex
 HAIL_INST=/psych/genetics_data/working/cseed/hail-inst
 echo "HAIL_INST=$HAIL_INST"
 
-SPARK_VERSION=1.6.0-cdh5.7.2
+SPARK_VERSION=1.6.0-cdh5.7.0
 echo "spark.version=$SPARK_VERSION"
 
 git fetch
 git checkout origin/master
 
-./gradlew --daemon -Dspark.version=$SPARK_VERSION shadowTestJar shadowJar
+./gradlew --daemon -Dspark.version=$SPARK_VERSION clean shadowTestJar shadowJar
 
 # test against cluster
 hdfs dfs -rm -r src/test/resources
