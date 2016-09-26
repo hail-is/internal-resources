@@ -8,8 +8,14 @@ echo "HAIL_INST=$HAIL_INST"
 SPARK_VERSION=1.6.2
 echo "spark.version=$SPARK_VERSION"
 
-git fetch
-git checkout origin/master
+BRANCH=origin/master
+echo BRANCH = $BRANCH
+
+JAR_BRANCH=`echo $BRANCH | tr '/' '-'`
+echo JAR_BRANCH = $JAR_BRANCH
+
+git fetch --all
+git checkout $BRANCH
 
 ./gradlew --daemon -Dspark.version=$SPARK_VERSION clean installDist shadowTestJar shadowJar
 
@@ -51,7 +57,7 @@ EOF
 rm -rf test-output
 gcloud compute copy-files $MASTER:~/test-output ..
 
-gcloud dataproc clusters delete $CLUSTER
+gcloud -q dataproc clusters delete $CLUSTER
 
 # copy locally for the record
 
@@ -63,7 +69,7 @@ touch $HAIL_INST/etc/jar.sh
 HASH=`git rev-parse --verify --short HEAD`
 echo "HASH=$HASH"
 
-JAR=$HAIL_INST/lib/hail-all-spark$SPARK_VERSION-$HASH.jar
+JAR=$HAIL_INST/lib/hail-$JAR_BRANCH-all-spark$SPARK_VERSION-$HASH.jar
 echo "JAR=$JAR"
 
 cp build/libs/hail-all-spark.jar $JAR
@@ -80,7 +86,7 @@ echo "JAR='$JAR'" >> $TMP_JAR_SH
 mv $TMP_JAR_SH $HAIL_INST/etc/jar.sh
 
 # copy to gs
-GS_JAR=gs://hail-common/hail-all-spark$SPARK_VERSION-$HASH.jar
+GS_JAR=gs://hail-common/hail-$JAR_BRANCH-all-spark$SPARK_VERSION-$HASH.jar
 echo GS_JAR = $GS_JAR
 gsutil cp ./build/libs/hail-all-spark.jar $GS_JAR
 
