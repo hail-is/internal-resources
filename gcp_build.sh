@@ -76,10 +76,6 @@ cp build/libs/hail-all-spark.jar $JAR
 
 TMP_JAR_SH=`mktemp`
 
-chgrp hail $TMP_JAR_SH
-chmod g+rw $TMP_JAR_SH
-chmod o+r $TMP_JAR_SH
-
 awk '/#/ {print $0; next} {printf "# %s\n", $0}' $HAIL_INST/etc/jar.sh > $TMP_JAR_SH
 echo "# `date +"%Y-%m-%d %T"` hail-all-spark$SPARK_VERSION-$HASH.jar" >> $TMP_JAR_SH
 echo "JAR='$JAR'" >> $TMP_JAR_SH
@@ -89,5 +85,6 @@ mv $TMP_JAR_SH $HAIL_INST/etc/jar.sh
 GS_JAR=gs://hail-common/hail-$JAR_BRANCH-all-spark$SPARK_VERSION-$HASH.jar
 echo GS_JAR = $GS_JAR
 gsutil cp ./build/libs/hail-all-spark.jar $GS_JAR
+gsutil acl set public-read $GS_JAR
 
 echo "Done!"
