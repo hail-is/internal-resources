@@ -28,7 +28,6 @@ SPARK_CLASSPATH=./build/libs/hail-all-spark-test.jar \
 # create if necessary
 mkdir -p $HAIL_INST/etc
 mkdir -p $HAIL_INST/lib
-touch $HAIL_INST/etc/jar.sh
 
 HASH=`git rev-parse --verify --short HEAD`
 echo "HASH=$HASH"
@@ -44,9 +43,14 @@ chgrp hail $TMP_JAR_SH
 chmod g+rw $TMP_JAR_SH
 chmod o+r $TMP_JAR_SH
 
-awk '/#/ {print $0; next} {printf "# %s\n", $0}' $HAIL_INST/etc/jar.sh > $TMP_JAR_SH
+if [ -f $HAIL_INST/etc/jar.sh ]; then
+    awk '/#/ {print $0; next} {printf "# %s\n", $0}' $HAIL_INST/etc/jar.sh > $TMP_JAR_SH
+fi
+
 echo "# `date +"%Y-%m-%d %T"` hail-all-spark$SPARK_VERSION-$HASH.jar" >> $TMP_JAR_SH
 echo "JAR='$JAR'" >> $TMP_JAR_SH
+
+rm -f $HAIL_INST/etc/jar.sh
 mv $TMP_JAR_SH $HAIL_INST/etc/jar.sh
 
 echo "Done!"
