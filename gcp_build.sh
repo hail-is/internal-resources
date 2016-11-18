@@ -2,27 +2,24 @@
 
 set -ex
 
-HAIL_INST=../hail-inst
-echo "HAIL_INST=$HAIL_INST"
-
 SPARK_VERSION=1.6.2
 echo "spark.version=$SPARK_VERSION"
 
-BRANCH=origin/master
-echo BRANCH = $BRANCH
+rm -rf hail
 
-JAR_BRANCH=`echo $BRANCH | tr '/' '-'`
-echo JAR_BRANCH = $JAR_BRANCH
+ORIGIN=hail-is
+BRANCH=master
+REPO=https://github.com/$ORIGIN/hail.git
 
-git fetch --all
-git checkout $BRANCH
+git clone --origin $ORIGIN --branch $BRANCH $REPO
+cd hail
 
 ./gradlew --daemon -Dspark.version=$SPARK_VERSION clean installDist shadowTestJar shadowJar
 
 # run tests
 ID=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | fold -w 12 | head -n 1)
 CLUSTER=cluster-ci-$ID
-echo CLUSTER = $CLUSTER
+echo "CLUSTER=$CLUSTER"
 
 MASTER=$CLUSTER-m
 
@@ -61,30 +58,27 @@ gcloud -q dataproc clusters delete $CLUSTER
 
 # copy locally for the record
 
-# create if necessary
-mkdir -p $HAIL_INST/etc
-mkdir -p $HAIL_INST/lib
-touch $HAIL_INST/etc/jar.sh
-
 HASH=`git rev-parse --verify --short HEAD`
 echo "HASH=$HASH"
 
-JAR=$HAIL_INST/lib/hail-$JAR_BRANCH-all-spark$SPARK_VERSION-$HASH.jar
-echo "JAR=$JAR"
-
-cp build/libs/hail-all-spark.jar $JAR
-
-TMP_JAR_SH=`mktemp`
-
-awk '/#/ {print $0; next} {printf "# %s\n", $0}' $HAIL_INST/etc/jar.sh > $TMP_JAR_SH
-echo "# `date +"%Y-%m-%d %T"` hail-all-spark$SPARK_VERSION-$HASH.jar" >> $TMP_JAR_SH
-echo "JAR='$JAR'" >> $TMP_JAR_SH
-mv $TMP_JAR_SH $HAIL_INST/etc/jar.sh
-
-# copy to gs
-GS_JAR=gs://hail-common/hail-$JAR_BRANCH-all-spark$SPARK_VERSION-$HASH.jar
-echo GS_JAR = $GS_JAR
+GS_JAR=gs://hail-common/hail-$ORIGIN-$BRANCH-all-spark$SPARK_VERSION-$HASH.jar
+echo "GS_JAR=$GS_JAR"
 gsutil cp ./build/libs/hail-all-spark.jar $GS_JAR
 gsutil acl set public-read $GS_JAR
+
+PYHAIL_ZIP=pyhail-$ORIGIN-$BRANCH-$HASH.zip
+GS_PYHAIL_ZIP=gs://hail-common/$PYHAIL_ZIP
+(cd python && zip -r ../build/$PYHAIL_ZIP pyhail)
+gsutil cp ./build/$PYHAIL_ZIP $GS_PYHAIL_ZIP
+gsutil acl set public-read $GS_PYHAIL_ZIP
+
+if [ x"$ORIGIN-$BRANCH" = x"hail-is-master" ]; then
+    TMP_CURRENT_HASH=`mktemp`
+    echo $HASH >> $TMP_CURRENT_HASH
+    gsutil cp $TMP_CURRENT_HASH gs://hail-common/latest-hash.txt
+    gsutil acl set public-read gs://hail-common/latest-hash.txt
+    
+    rm -f $TMP_CURRENT_HASH
+fi
 
 echo "Done!"
