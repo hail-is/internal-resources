@@ -2,14 +2,24 @@
 
 set -ex
 
+umask 002
+
 HAIL_INST=/mnt/lustre/tpoterba/hail-inst
 echo "HAIL_INST=$HAIL_INST"
 
 SPARK_VERSION=1.5.2
 echo "spark.version=$SPARK_VERSION"
 
-git fetch
-git checkout origin/master
+rm -rf hail
+
+ORIGIN=hail-is
+BRANCH=master
+REPO=https://github.com/$ORIGIN/hail.git
+
+git clone --origin $ORIGIN --branch $BRANCH $REPO
+cd hail
+
+patch -p0 < spark1.patch
 
 ./gradlew --daemon -Dspark.version=$SPARK_VERSION clean shadowTestJar shadowJar
 
@@ -52,5 +62,11 @@ echo "JAR='$JAR'" >> $TMP_JAR_SH
 
 rm -f $HAIL_INST/etc/jar.sh
 mv $TMP_JAR_SH $HAIL_INST/etc/jar.sh
+
+rm -rf $HAIL_INST/python/pyhail-old
+if [ -e $HAIL_INST/python/pyhail ]; then
+    mv $HAIL_INST/python/pyhail $HAIL_INST/python/pyhail-old
+fi
+cp -r python/pyhail $HAIL_INST/python
 
 echo "Done!"
